@@ -9,10 +9,12 @@ from PIL import Image
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.remote.webdriver import WebDriver
+from selenium.common.exceptions import StaleElementReferenceException
 
 from .script import img2pdf, dir_check, os_start_file, clear_temp, escape
 
 from time import sleep
+import os
 
 
 class WeRead:
@@ -38,12 +40,16 @@ class WeRead:
             weread = WeRead(headless_driver)
     """
 
+    current_book_name = ''
+    _js_store = {}
+
     def __init__(self, headless_driver: WebDriver, patience=30, debug=False):
         headless_driver.get('https://weread.qq.com/')
         headless_driver.implicitly_wait(5)
         self.driver: WebDriver = headless_driver
         self.patience = patience
         self.debug_mode = debug
+        self.path = os.path.dirname(os.path.realpath(__file__))
 
     def __enter__(self):
         return self
@@ -52,8 +58,19 @@ class WeRead:
         if not self.debug_mode:
             clear_temp('wrs-temp')
 
-    def S(self, selector):
-        return WebDriverWait(self.driver, self.patience).until(lambda driver: driver.find_element(By.CSS_SELECTOR, selector))
+    def load_js(self, name):
+        if name in self._js_store:
+            return self._js_store[name]
+        with open(f'{self.path}/js/{name}.js', 'r', encoding='utf-8') as f:
+            js = f.read()
+            self._js_store[name] = js
+            return js
+
+    def use_js(self, name):
+        return self.driver.execute_script(self.load_js(name))
+
+    def S(self, selector, by=By.CSS_SELECTOR):
+        return WebDriverWait(self.driver, self.patience).until(lambda driver: driver.find_element(by, selector))
 
     def click(self, target):
         self.driver.execute_script('arguments[0].click();', target)
@@ -110,8 +127,8 @@ class WeRead:
         dir_check('wrs-temp')
 
         # get QRCode for Login
-        self.S('button.navBar_link_Login').click()
-        self.S('.login_dialog_qrcode>img').screenshot(
+        self.S('登录', By.PARTIAL_LINK_TEXT).click()
+        self.S('.wr_loading_container>img').screenshot(
             'wrs-temp/login_qrcode.png')
 
         login_qrcode = Image.open('wrs-temp/login_qrcode.png')
@@ -125,7 +142,8 @@ class WeRead:
         for i in range(wait_turns):
             print(f'Wait for QRCode Scan...{i}/{wait_turns}turns')
             try:
-                self.driver.find_element(By.CSS_SELECTOR, '.menu_container')
+                self.driver.find_element(
+                    By.XPATH, "//div[text()='我的书架']")
                 print('Login Succeed.')
                 break
             except Exception:
@@ -140,7 +158,8 @@ class WeRead:
     def switch_to_context(self):
         """switch to main body of the book"""
         self.S('button.catalog').click()
-        self.S('li.chapterItem:nth-child(2)').click()
+        self.use_js('reset_catlog_position')
+        self.S('li.readerCatalog_list_item:nth-child(2)').click()
 
     def set_font_size(self, font_size_index=1):
         """
@@ -282,3 +301,66 @@ class WeRead:
         print('scanning finished.')
         if show_output:
             os_start_file(f'{save_at}/{book_name}.pdf')
+
+    def download_html(self, html, save_at='.', book_name='', show_output=True):
+        book_name = book_name or self.current_book_name
+        print(f'Downloading the book:"{book_name}"')
+        dir_check(save_at)
+        save_path = f'{save_at}/{book_name}.html'
+        with open(save_path, 'w', encoding='utf-8') as f:
+            f.write(html)
+        if show_output:
+            os_start_file(save_path)
+        return save_path
+
+    def scan2html(self, book_url, save_at='.', show_output=True):
+        html = self.get_html(book_url)
+        self.download_html(html, save_at=save_at, show_output=show_output)
+
+    def get_html(self, book_url):
+        # valid the url
+        if 'https://weread.qq.com/web/reader/' not in book_url:
+            raise Exception('WeRead.UrlError: Wrong url format.')
+
+        # construct root html and observer
+        self.driver.execute_cdp_cmd(
+            'Page.addScriptToEvaluateOnNewDocument', {'source': self.load_js('construct_root_and_observer')})
+
+        # switch to target book url
+        self.driver.get(book_url)
+
+        # start observation
+        self.use_js('start_observation')
+
+        # switch to target book's cover
+        self.switch_to_context()
+
+        # get the name of the book
+        self.current_book_name = self.S('span.readerTopBar_title_link').text
+        print(f'Scanning the book:"{self.current_book_name}"')
+
+        while True:
+            # find next page or chapter button
+            try:
+                readerFooter = self.S(
+                    '.renderTarget_pager_button_right,.readerFooter_ending')
+            except Exception:
+                break
+
+            try:
+                readerFooterClass = readerFooter.get_attribute('class')
+
+                if 'ending' in readerFooterClass:
+                    break
+
+                # go to next page or chapter
+                readerFooter.click()
+            except StaleElementReferenceException:
+                # if element be stale, then relocate manually
+                continue
+
+        self.use_js('observer_disconnect')
+        html = self.driver.execute_script("return rootElement.outerHTML")
+        self.use_js('clean_root_element')
+
+        return html
