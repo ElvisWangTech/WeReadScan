@@ -5,7 +5,8 @@
 // @author       Secant
 
 // start observation
-contentObserver.observe(document.documentElement, {
+const targetNode = document.getElementById('preRenderContent');
+contentObserver.observe(targetNode, {
     childList: true,
     subtree: true,
 });

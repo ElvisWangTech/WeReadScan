@@ -343,16 +343,24 @@ class WeRead:
             # find next page or chapter button
             try:
                 readerFooter = self.S(
-                    '.renderTarget_pager_button_right,.readerFooter_ending')
+                    '.renderTarget_pager_button_right')
             except Exception:
                 break
 
             try:
-                readerFooterClass = readerFooter.get_attribute('class')
+                readerFooterEnding = self.S(
+                    '.horizontal_reader_back_cover_wrapper')
 
-                if 'ending' in readerFooterClass:
+                if readerFooterEnding.is_displayed():
                     break
 
+                readerNeedPay = self.S(
+                    '.wr_horizontal_reader_needPay_container')
+
+                if readerNeedPay.is_displayed():
+                    break
+
+                sleep(2)
                 # go to next page or chapter
                 readerFooter.click()
             except StaleElementReferenceException:

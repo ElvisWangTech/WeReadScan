@@ -12,32 +12,38 @@ rootElement.append(styleElement);
 rootElement.append(bodyElement);
 
 // define observer handlers
-const contentObserver = new MutationObserver((_, observer) => {
-    const content = document.querySelector(".preRenderContainer:not([style])");
-    if (content) {
+const contentObserver = new MutationObserver((mutiationsList, observer) => {
+  for (let mutation of mutiationsList) {
+    if (mutation.type === 'childList') {
+      const content = document.querySelector(".preRenderContainer:not([style])");
+      if (content) {
         // define styles
         if (styleElement.childNodes.length === 0) {
-            const contentStyle = content.querySelector("style");
-            if (contentStyle?.childNodes.length) {
-                styleElement.innerHTML = contentStyle.innerHTML
-                    .replaceAll(".readerChapterContent", ".preRenderContent")
-                    .replaceAll(/汉仪旗黑(?=\d)/g, "汉仪旗黑 ")
-                    .replaceAll(/汉仪楷体(?!S)/g, "汉仪楷体S");
-                styleElement.append(
-                    ".preRenderContent { page-break-after: always; }"
-                );
-            }
+          const contentStyle = content.querySelector("style");
+          if (contentStyle?.childNodes.length) {
+            styleElement.innerHTML = contentStyle.innerHTML
+              .replaceAll(".readerChapterContent", ".preRenderContent")
+              .replaceAll(/汉仪旗黑(?=\d)/g, "汉仪旗黑 ")
+              .replaceAll(/汉仪楷体(?!S)/g, "汉仪楷体S");
+            styleElement.append(
+              ".preRenderContent { page-break-after: always; }"
+            );
+          }
         }
         // append contents
         const contentDiv = content.querySelector("#preRenderContent");
         if (contentDiv) {
-            contentDiv.removeAttribute("id");
-            contentDiv
-                .querySelectorAll("img")
-                .forEach(
-                    (img) => (img.src = img.getAttribute("data-src") || img.src)
-                );
-            bodyElement.append(contentDiv.cloneNode(true));
+          contentDiv.removeAttribute("id");
+          contentDiv.style.columnWidth = 'unset'
+          contentDiv
+            .querySelectorAll("img")
+            .forEach(
+              (img) => (img.src = img.getAttribute("data-src") || img.src)
+            );
+          bodyElement.append(contentDiv.cloneNode(true));
+          console.log('dbg: appended: ', contentDiv.innerHTML.slice(0, 20))
         }
+      }
     }
+  }
 })
