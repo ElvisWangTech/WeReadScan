@@ -15,6 +15,7 @@ rootElement.append(bodyElement);
 const contentObserver = new MutationObserver((mutiationsList, observer) => {
   for (let mutation of mutiationsList) {
     if (mutation.type === 'childList') {
+      console.log('dbg: occured!!')
       const content = document.querySelector(".preRenderContainer:not([style])");
       if (content) {
         // define styles
@@ -33,15 +34,23 @@ const contentObserver = new MutationObserver((mutiationsList, observer) => {
         // append contents
         const contentDiv = content.querySelector("#preRenderContent");
         if (contentDiv) {
-          contentDiv.removeAttribute("id");
-          contentDiv.style.columnWidth = 'unset'
-          contentDiv
+          const contentDivCloned = contentDiv.cloneNode(true)
+          contentDivCloned.removeAttribute("id");
+          contentDivCloned.removeAttribute('style');
+          contentDivCloned
             .querySelectorAll("img")
             .forEach(
               (img) => (img.src = img.getAttribute("data-src") || img.src)
             );
-          bodyElement.append(contentDiv.cloneNode(true));
-          console.log('dbg: appended: ', contentDiv.innerHTML.slice(0, 20))
+          if (contentDivCloned.innerHTML) {
+            let dup = false
+            bodyElement.querySelectorAll('.preRenderContent').forEach(nd => {
+              if (nd.textContent === contentDivCloned.textContent) dup = true;
+            })
+            if (!dup) {
+              bodyElement.append(contentDivCloned);
+            }
+          }
         }
       }
     }

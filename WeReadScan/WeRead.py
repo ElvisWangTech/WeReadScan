@@ -15,6 +15,7 @@ from .script import img2pdf, dir_check, os_start_file, clear_temp, escape
 
 from time import sleep
 import os
+from random import random
 
 
 class WeRead:
@@ -158,8 +159,14 @@ class WeRead:
     def switch_to_context(self):
         """switch to main body of the book"""
         self.S('button.catalog').click()
+        sleep(1)
         self.use_js('reset_catlog_position')
-        self.S('li.readerCatalog_list_item:nth-child(2)').click()
+        sleep(1)
+        first_item = self.S('li.readerCatalog_list_item:nth-child(1)')
+        first_item_class = first_item.get_attribute('class')
+        if 'selected' not in first_item_class:
+            first_item.click()
+            sleep(1)
 
     def set_font_size(self, font_size_index=1):
         """
@@ -329,17 +336,18 @@ class WeRead:
         # switch to target book url
         self.driver.get(book_url)
 
-        # start observation
-        self.use_js('start_observation')
-
         # switch to target book's cover
         self.switch_to_context()
+
+        # start observation
+        self.use_js('start_observation')
 
         # get the name of the book
         self.current_book_name = self.S('span.readerTopBar_title_link').text
         print(f'Scanning the book:"{self.current_book_name}"')
 
         while True:
+            sleep(random())
             # find next page or chapter button
             try:
                 readerFooter = self.S(
@@ -360,7 +368,7 @@ class WeRead:
                 if readerNeedPay.is_displayed():
                     break
 
-                sleep(2)
+                sleep(1)
                 # go to next page or chapter
                 readerFooter.click()
             except StaleElementReferenceException:
